@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Kids Trivia · Play</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fredoka:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#0A1F3A; --bg2:#0E2A4D; --card:#143866; --panel:#1A4480;
+    --yellow:#FFD23F; --teal:#00D9C0; --orange:#FF8C42;
+    --lime:#A8E063; --pink:#FF6B9D; --purple:#A855F7;
+    --white:#FFFFFF; --dim:rgba(255,255,255,0.65);
+    --faint:rgba(255,255,255,0.1); --sep:rgba(255,255,255,0.15);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;width:100%;overflow:hidden;background:var(--bg);font-family:'Fredoka',sans-serif;color:var(--white);}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 90% 50% at 50% 0%,rgba(0,217,192,0.18),transparent 70%),radial-gradient(ellipse 80% 40% at 50% 100%,rgba(255,140,66,0.1),transparent 70%);}
+
+  .app{position:relative;z-index:1;width:100%;height:100%;max-width:480px;margin:0 auto;display:flex;flex-direction:column;padding:max(16px,env(safe-area-inset-top)) 18px max(20px,env(safe-area-inset-bottom));}
+
+  .header{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;border-bottom:1px solid var(--sep);flex-shrink:0;}
+  .header-left{display:flex;align-items:center;gap:10px;}
+  .h-icon{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--yellow),var(--orange));display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .h-name{font-family:'Fredoka';font-weight:700;font-size:19px;line-height:1;}
+  .h-tag{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--yellow);margin-top:2px;font-weight:600;}
+  .h-status{font-size:12px;color:var(--dim);text-align:right;display:flex;align-items:center;gap:6px;font-weight:500;}
+  .conn-dot{width:8px;height:8px;border-radius:50%;background:var(--lime);box-shadow:0 0 6px rgba(168,224,99,0.6);animation:pulseDot 1.6s ease infinite;}
+  .conn-dot.bad{background:var(--pink);box-shadow:0 0 6px rgba(255,107,157,0.6);}
+  @keyframes pulseDot{0%,100%{opacity:1}50%{opacity:0.4}}
+
+  .screens{flex:1;position:relative;overflow:hidden;display:flex;flex-direction:column;padding-top:18px;}
+  .screen{position:absolute;inset:0;display:none;flex-direction:column;animation:fadeIn 0.25s ease both;padding-top:18px;}
+  .screen.active{display:flex;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+  .center-block{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:0 8px;}
+  .big-icon{font-size:80px;margin-bottom:8px;animation:bounce 1.4s ease-in-out infinite alternate;}
+  @keyframes bounce{from{transform:translateY(0) scale(1)}to{transform:translateY(-10px) scale(1.06)}}
+  .display-title{font-family:'Fredoka';font-weight:700;font-size:54px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .display-sub{font-size:16px;color:var(--white);max-width:340px;line-height:1.55;font-weight:500;}
+
+  /* JOIN */
+  .join-form{width:100%;display:flex;flex-direction:column;gap:14px;margin-top:24px;}
+  .join-input{width:100%;background:var(--card);border:2px solid var(--sep);border-radius:16px;padding:20px 22px;font-size:18px;font-family:'Fredoka';font-weight:500;color:var(--white);outline:none;transition:border-color 0.2s;}
+  .join-input:focus{border-color:var(--teal);background:var(--panel);}
+  .join-input::placeholder{color:rgba(255,255,255,0.3);}
+  .join-btn{width:100%;background:linear-gradient(135deg,var(--orange),var(--pink));border:none;border-radius:16px;padding:22px;font-family:'Fredoka';font-weight:700;font-size:24px;color:white;cursor:pointer;transition:all 0.15s;box-shadow:0 4px 16px rgba(255,107,157,0.3);}
+  .join-btn:active{transform:scale(0.97);}
+  .join-btn:disabled{opacity:0.5;cursor:default;}
+  .err-msg{color:var(--pink);font-size:13px;text-align:center;min-height:18px;font-weight:500;}
+  .prize-callout{background:rgba(255,210,63,0.1);border:1.5px solid rgba(255,210,63,0.3);border-radius:14px;padding:14px 18px;font-size:14px;color:var(--yellow);text-align:center;font-weight:600;margin-top:8px;}
+
+  /* WAITING */
+  .you-in{font-family:'Fredoka';font-weight:700;font-size:62px;color:var(--lime);text-shadow:0 0 30px rgba(168,224,99,0.4);}
+  .player-name{font-size:20px;color:var(--white);font-weight:600;margin-top:4px;}
+
+  /* ROUND INTRO */
+  .ri-eye{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--teal);font-weight:700;}
+  .ri-name{font-family:'Fredoka';font-weight:700;font-size:54px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .ri-text{font-size:16px;color:var(--white);max-width:360px;line-height:1.55;font-weight:500;}
+
+  /* QUESTION */
+  .q-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-shrink:0;gap:10px;}
+  .q-meta-pills{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .q-pill{font-family:'Bebas Neue';font-size:13px;letter-spacing:2px;padding:5px 11px;border-radius:6px;background:rgba(255,140,66,0.15);border:1.5px solid rgba(255,140,66,0.4);color:var(--orange);}
+  .q-pill.cat{background:rgba(0,217,192,0.12);border-color:rgba(0,217,192,0.3);color:var(--teal);font-family:'Fredoka';font-weight:600;font-size:11px;letter-spacing:1px;}
+  .q-pill.pts{background:rgba(255,210,63,0.12);border-color:rgba(255,210,63,0.4);color:var(--yellow);}
+
+  .q-timer{display:flex;align-items:center;gap:8px;}
+  .q-timer-num{font-family:'Bebas Neue';font-size:26px;letter-spacing:1px;color:var(--white);min-width:32px;text-align:right;line-height:1;}
+  .q-timer-num.urgent{color:var(--pink);animation:pulse 0.6s ease-in-out infinite alternate;}
+  @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.1)}}
+  .q-timer-bar{width:54px;height:6px;background:var(--faint);border-radius:3px;overflow:hidden;}
+  .q-timer-fill{height:100%;width:100%;background:var(--orange);border-radius:3px;transition:width 1s linear,background 0.3s;}
+  .q-timer-fill.urgent{background:var(--pink);}
+
+  .q-text{font-family:'Fredoka';font-weight:700;font-size:26px;line-height:1.25;color:var(--white);margin-bottom:18px;flex-shrink:0;}
+
+  .answers{display:flex;flex-direction:column;gap:12px;flex:1;overflow:auto;}
+  .ans-btn{
+    width:100%;
+    background:var(--card);
+    border:2px solid var(--sep);
+    border-radius:16px;
+    padding:20px 20px;
+    display:flex;align-items:center;gap:16px;
+    cursor:pointer;
+    transition:transform 0.1s,border-color 0.2s,background 0.2s;
+    font-family:'Fredoka';
+    text-align:left;
+    color:var(--white);
+    min-height:70px;
+  }
+  .ans-btn:active{transform:scale(0.98);}
+  /* HOVER state only on actual mouse devices to avoid iOS stuck-hover */
+  @media (hover: hover) {
+    .ans-btn:hover{border-color:var(--teal);background:var(--panel);}
+  }
+  .ans-btn.locked{opacity:0.4;cursor:default;pointer-events:none;}
+  .ans-btn.selected{
+    border-color:var(--orange);
+    background:linear-gradient(135deg,rgba(255,140,66,0.2),rgba(255,107,157,0.15));
+    box-shadow:0 0 24px rgba(255,140,66,0.3);
+  }
+  .ans-letter{
+    width:42px;height:42px;
+    flex-shrink:0;
+    border-radius:11px;
+    background:var(--faint);
+    border:2px solid var(--sep);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'Fredoka';font-weight:700;font-size:22px;
+    color:var(--teal);
+    transition:all 0.2s;
+  }
+  .ans-btn.selected .ans-letter{background:var(--orange);border-color:var(--orange);color:white;}
+  .ans-text{font-size:18px;font-weight:600;line-height:1.3;}
+
+  /* SUBMITTED */
+  .sub-icon{font-size:72px;margin-bottom:8px;}
+  .sub-status{font-family:'Fredoka';font-weight:700;font-size:48px;color:var(--teal);}
+  .sub-locked{font-family:'Fredoka';font-weight:700;font-size:24px;color:var(--white);background:var(--card);border:2px solid var(--orange);border-radius:14px;padding:16px 26px;display:inline-flex;align-items:center;gap:14px;margin-top:8px;}
+  .sub-locked .sub-letter{width:38px;height:38px;border-radius:10px;background:var(--orange);display:flex;align-items:center;justify-content:center;color:white;font-size:20px;}
+  .sub-watch{font-size:14px;color:var(--dim);max-width:300px;line-height:1.5;margin-top:8px;font-weight:500;}
+
+  /* REVEAL */
+  .rev-icon{font-size:96px;margin-bottom:4px;}
+  .rev-icon.correct{filter:drop-shadow(0 0 20px rgba(168,224,99,0.5));}
+  .rev-icon.wrong{filter:drop-shadow(0 0 16px rgba(255,107,157,0.4));}
+  .rev-result{font-family:'Fredoka';font-weight:700;font-size:62px;line-height:1;}
+  .rev-result.correct{color:var(--lime);}
+  .rev-result.wrong{color:var(--pink);}
+  .rev-pts{font-family:'Bebas Neue';font-size:42px;letter-spacing:2px;color:var(--yellow);margin-top:4px;}
+  .rev-row{display:flex;align-items:center;gap:12px;font-size:15px;background:var(--card);border:2px solid var(--sep);border-radius:14px;padding:14px 16px;width:100%;max-width:340px;}
+  .rev-row .rev-letter{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-family:'Fredoka';font-weight:700;font-size:18px;flex-shrink:0;}
+  .rev-row.correct{border-color:var(--lime);background:rgba(168,224,99,0.1);}
+  .rev-row.correct .rev-letter{background:var(--lime);color:#0A1F3A;}
+  .rev-row.wrong{border-color:rgba(255,107,157,0.4);}
+  .rev-row.wrong .rev-letter{background:var(--pink);color:white;}
+  .rev-row .rev-text{flex:1;color:var(--white);text-align:left;font-weight:600;font-family:'Fredoka';}
+  .rev-row .rev-tag{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);font-weight:700;}
+
+  /* INTERMISSION */
+  .int-eye{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--teal);font-weight:700;}
+  .int-title{font-family:'Fredoka';font-weight:700;font-size:48px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .int-your-score{background:var(--card);border:2px solid var(--teal);border-radius:14px;padding:16px 22px;display:flex;flex-direction:column;align-items:center;gap:4px;margin-top:8px;}
+  .int-your-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-weight:700;}
+  .int-your-points{font-family:'Bebas Neue';font-size:48px;color:var(--teal);letter-spacing:3px;line-height:1;}
+  .int-your-rank{font-size:14px;color:var(--white);font-weight:600;}
+  .int-encouragement{font-size:15px;color:var(--white);max-width:320px;line-height:1.5;font-weight:500;}
+
+  /* GAME OVER */
+  .go-trophy{font-size:96px;}
+  .go-prize-trophy{font-size:96px;animation:bounce 0.8s ease-in-out infinite alternate;}
+  .go-title{font-family:'Fredoka';font-weight:700;font-size:54px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+  .go-final{background:var(--card);border:2px solid var(--teal);border-radius:16px;padding:20px 26px;display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px;}
+  .go-final.winner{border-color:var(--yellow);background:rgba(255,210,63,0.1);box-shadow:0 0 30px rgba(255,210,63,0.3);}
+  .go-label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);font-weight:700;}
+  .go-correct{font-family:'Bebas Neue';font-size:64px;color:var(--yellow);letter-spacing:3px;line-height:1;}
+  .go-rank-line{font-size:15px;color:var(--white);font-weight:600;}
+  .go-prize-banner{background:linear-gradient(135deg,var(--yellow),var(--orange));color:#0A1F3A;border-radius:14px;padding:14px 24px;font-family:'Fredoka';font-weight:700;font-size:22px;text-align:center;margin-top:12px;animation:pulse 1.5s ease infinite;}
+  .go-thanks{font-size:14px;color:var(--white);max-width:320px;line-height:1.5;font-weight:500;margin-top:12px;}
+
+  /* FOOTER */
+  .footer{flex-shrink:0;padding-top:14px;border-top:1px solid var(--sep);text-align:center;}
+  .footer-text{font-family:'Cormorant Garamond',serif;font-size:14px;color:rgba(255,255,255,0.4);letter-spacing:0.04em;}
+  .footer-text span{color:rgba(255,210,63,0.6);font-weight:600;}
+
+  .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--orange);color:white;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;z-index:200;display:none;}
+  .toast.show{display:block;animation:fadeIn 0.3s ease both;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="header">
+    <div class="header-left">
+      <div class="h-icon">🎉</div>
+      <div>
+        <div class="h-name">Kids Trivia</div>
+        <div class="h-tag">Ballantyne Swim</div>
+      </div>
+    </div>
+    <div class="h-status">
+      <div class="conn-dot" id="connDot"></div>
+      <span id="connText">Connecting…</span>
+    </div>
+  </header>
+
+  <div class="screens">
+
+    <!-- 1. NAME ENTRY -->
+    <div class="screen active" id="screenName">
+      <div class="center-block">
+        <div class="big-icon">🌊</div>
+        <div class="display-title">Let's Play!</div>
+        <div class="display-sub">Type your name and get ready for trivia!</div>
+        <div class="join-form">
+          <input class="join-input" id="nameInput" type="text" placeholder="Your name" maxlength="20" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false">
+          <button class="join-btn" id="joinBtn" onclick="joinGame()">Join the Game!</button>
+          <div class="err-msg" id="joinErr"></div>
+          <div class="prize-callout">🏆 Get 15+ right to win a prize!</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. WAITING -->
+    <div class="screen" id="screenWaiting">
+      <div class="center-block">
+        <div class="big-icon">✨</div>
+        <div class="you-in">You're In!</div>
+        <div class="player-name" id="lobbyPlayerName">—</div>
+        <div class="display-sub" style="margin-top:14px;">Look at the TV. We'll start really soon!</div>
+        <div style="margin-top:18px;font-size:13px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;font-weight:700;">
+          <span id="lobbyCount">0</span> Players In
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ROUND INTRO -->
+    <div class="screen" id="screenIntro">
+      <div class="center-block">
+        <div class="big-icon" id="introIcon">🦁</div>
+        <div class="ri-eye" id="introEye">Round 1 of 2</div>
+        <div class="ri-name" id="introName">—</div>
+        <div class="ri-text" id="introText">—</div>
+        <div style="font-family:'Fredoka';font-weight:700;font-size:20px;color:var(--orange);margin-top:8px;">Get Ready!</div>
+      </div>
+    </div>
+
+    <!-- 4. QUESTION -->
+    <div class="screen" id="screenQuestion">
+      <div class="q-header">
+        <div class="q-meta-pills">
+          <div class="q-pill" id="qNum">Q1</div>
+          <div class="q-pill cat" id="qCat">—</div>
+          <div class="q-pill pts" id="qPts">100</div>
+        </div>
+        <div class="q-timer">
+          <div class="q-timer-bar"><div class="q-timer-fill" id="qTimerFill"></div></div>
+          <div class="q-timer-num" id="qTimerNum">20</div>
+        </div>
+      </div>
+      <div class="q-text" id="qText">—</div>
+      <div class="answers" id="answersList"></div>
+    </div>
+
+    <!-- 5. SUBMITTED -->
+    <div class="screen" id="screenSubmitted">
+      <div class="center-block">
+        <div class="sub-icon">🔒</div>
+        <div class="sub-status">Locked In!</div>
+        <div class="sub-locked" id="subLocked"><span class="sub-letter" id="subLetter">—</span><span id="subText">—</span></div>
+        <div class="sub-watch">Look at the TV for the answer!</div>
+      </div>
+    </div>
+
+    <!-- 6. REVEAL -->
+    <div class="screen" id="screenReveal">
+      <div class="center-block">
+        <div class="rev-icon" id="revIcon">✓</div>
+        <div class="rev-result" id="revResult">—</div>
+        <div class="rev-pts" id="revPts">+100</div>
+        <div class="rev-row" id="revYour">
+          <div class="rev-letter" id="revYourLetter">A</div>
+          <div class="rev-text" id="revYourText">—</div>
+          <div class="rev-tag">You</div>
+        </div>
+        <div class="rev-row correct" id="revCorrect">
+          <div class="rev-letter" id="revCorrectLetter">B</div>
+          <div class="rev-text" id="revCorrectText">—</div>
+          <div class="rev-tag">Right</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7. INTERMISSION -->
+    <div class="screen" id="screenIntermission">
+      <div class="center-block">
+        <div class="big-icon">🌟</div>
+        <div class="int-eye">Halfway there!</div>
+        <div class="int-title">Halftime!</div>
+        <div class="int-your-score">
+          <div class="int-your-label">Your Score</div>
+          <div class="int-your-points" id="intYourPoints">0</div>
+          <div class="int-your-rank" id="intYourRank">Rank: —</div>
+        </div>
+        <div class="int-encouragement" id="intEncouragement">Keep going! Round 2 is coming up.</div>
+      </div>
+    </div>
+
+    <!-- 8. GAME OVER -->
+    <div class="screen" id="screenOver">
+      <div class="center-block">
+        <div id="goIconEl" class="go-trophy">🏆</div>
+        <div class="go-title" id="goTitle">Great Game!</div>
+        <div class="go-final" id="goFinalBox">
+          <div class="go-label">You Got</div>
+          <div class="go-correct"><span id="goCorrect">0</span> / <span id="goTotal">30</span></div>
+          <div class="go-rank-line" id="goRankLine">Rank: —</div>
+        </div>
+        <div class="go-prize-banner" id="goPrizeBanner" style="display:none;">🏆 You won a prize! 🏆</div>
+        <div class="go-thanks" id="goThanks">Thanks for playing!</div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="footer">
+    <div class="footer-text">Powered by Club<span>OS</span></div>
+  </footer>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG — must match index.html question data EXACTLY
+// ═══════════════════════════════════════════════════════════════
+const CONFIG = {
+  supabaseUrl:'https://ykfvwqewnfnibpzytspn.supabase.co',
+  supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZnZ3cWV3bmZuaWJwenl0c3BuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MjE2NzYsImV4cCI6MjA5MDM5NzY3Nn0.cnMztZVHDV3Hof-26aRi4NIM7wKwjzxAfoMBR3oItms',
+  questionSecs:20,
+  prizeThreshold:15,
+  rounds:[
+    {name:'Wild Things & More',icon:'🦁',intro:"Animals, movies, and silly stuff! Get those fingers ready.",questions:[
+      {q:"What do you call a baby kangaroo?",answers:["Cub","Joey","Pup","Kit"],correct:1,pts:100},
+      {q:"Which animal is the king of the jungle?",answers:["Tiger","Elephant","Lion","Gorilla"],correct:2,pts:100},
+      {q:"How many legs does a spider have?",answers:["6","7","8","10"],correct:2,pts:100},
+      {q:"What is the largest animal on Earth?",answers:["Elephant","Blue Whale","Giraffe","Great White Shark"],correct:1,pts:100},
+      {q:"Which animal can change its color to blend in?",answers:["Dolphin","Penguin","Chameleon","Owl"],correct:2,pts:100},
+      {q:"What do bees make?",answers:["Milk","Honey","Bread","Butter"],correct:1,pts:100},
+      {q:"Who is the main character in 'Finding Nemo'?",answers:["A puppy","A clownfish","A turtle","A crab"],correct:1,pts:100},
+      {q:"What kind of toy is Buzz Lightyear from 'Toy Story'?",answers:["A cowboy","A space ranger","A robot","A dinosaur"],correct:1,pts:100},
+      {q:"In 'Frozen', what is the name of Elsa's sister?",answers:["Belle","Moana","Anna","Ariel"],correct:2,pts:100},
+      {q:"What color is Lightning McQueen in 'Cars'?",answers:["Blue","Yellow","Red","Green"],correct:2,pts:100},
+      {q:"What do you wear on your eyes when swimming?",answers:["Goggles","Sunglasses","A mask","Glasses"],correct:0,pts:100},
+      {q:"Which of these is a swimming stroke?",answers:["Butterfly","Caterpillar","Beetle","Worm"],correct:0,pts:100},
+      {q:"What helps you float in the pool?",answers:["A rock","A pool noodle","A bowling ball","A book"],correct:1,pts:100},
+      {q:"What sound does a cow make?",answers:["Woof","Meow","Moo","Quack"],correct:2,pts:100},
+      {q:"Which of these is a fruit?",answers:["Carrot","Apple","Lettuce","Potato"],correct:1,pts:100}
+    ]},
+    {name:'Pirates, 80s & Tricky',icon:'🏴‍☠️',intro:"Pirates, throwbacks, and a few brain-twisters. Earn extra points!",questions:[
+      {q:"What do pirates say to greet each other?",answers:["Hello","Ahoy!","Howdy","Hi-ya"],correct:1,pts:150},
+      {q:"What do pirates often hunt for?",answers:["Sandwiches","Treasure","Books","Vegetables"],correct:1,pts:150},
+      {q:"What do pirates wear over one eye?",answers:["A pirate patch","A bandana","A hat","Sunglasses"],correct:0,pts:150},
+      {q:"What is the name of a pirate's flag?",answers:["The Big Black","The Jolly Roger","The Skull Ship","The Red Cross"],correct:1,pts:150},
+      {q:"In the 80s movie 'E.T.', what kind of creature was E.T.?",answers:["A dog","An alien","A monster","A robot"],correct:1,pts:200},
+      {q:"What was the famous 80s arcade game where you eat dots and run from ghosts?",answers:["Tetris","Pac-Man","Donkey Kong","Frogger"],correct:1,pts:200},
+      {q:"What does Mario try to save in his classic video games?",answers:["A castle","A princess","A treasure","A puppy"],correct:1,pts:200},
+      {q:"Which 80s movie has a flying DeLorean car that travels through time?",answers:["Star Wars","Back to the Future","Ghostbusters","The Goonies"],correct:1,pts:200},
+      {q:"How many planets are in our solar system?",answers:["6","7","8","9"],correct:2,pts:200},
+      {q:"What is the capital of the United States?",answers:["New York","Los Angeles","Washington, D.C.","Chicago"],correct:2,pts:200},
+      {q:"How many sides does a triangle have?",answers:["2","3","4","5"],correct:1,pts:100},
+      {q:"What is the tallest mountain in the world?",answers:["Mount Everest","Mount Fuji","Mount Kilimanjaro","Mount Rushmore"],correct:0,pts:200},
+      {q:"Which planet is closest to the sun?",answers:["Earth","Mars","Mercury","Venus"],correct:2,pts:200},
+      {q:"How old is Orhan, the Ballantyne FAC Director?",answers:["44","49","54","59"],correct:2,pts:300},
+      {q:"What color is the Cabana umbrella at Ballantyne?",answers:["Red","Green","Blue","White"],correct:1,pts:200}
+    ]}
+  ]
+};
+
+const TOTAL_QUESTIONS = CONFIG.rounds.reduce((sum,r)=>sum+r.questions.length, 0);
+const LETTERS=['A','B','C','D'];
+const sb = supabase.createClient(CONFIG.supabaseUrl, CONFIG.supabaseKey);
+
+const urlParams = new URLSearchParams(window.location.search);
+const SESSION_ID = urlParams.get('s');
+
+let state = {
+  player: null,
+  phase: null,
+  roundIndex: 0,
+  questionIndex: 0,
+  answeredKey: null,    // namespaced "ri-qi" — bug fix from music version
+  myAnswerIndex: null,
+  myPtsEarned: 0,
+  correctCount: 0,      // local count for prize threshold
+  questionStartedAt: null,
+  submitting: false,
+};
+
+let timerInt = null;
+
+function setConn(ok, label){
+  const dot=document.getElementById('connDot'); dot.className='conn-dot'+(ok?'':' bad');
+  document.getElementById('connText').textContent=label;
+}
+
+async function init(){
+  if(!SESSION_ID){
+    setConn(false,'No session');
+    document.getElementById('joinErr').textContent='Scan the QR code from the TV!';
+    document.getElementById('joinBtn').disabled=true;
+    return;
+  }
+  const{data,error}=await sb.from('trivia_sessions').select('phase,round_index,question_index').eq('id',SESSION_ID).single();
+  if(error||!data){
+    setConn(false,'No session');
+    document.getElementById('joinErr').textContent='Game not found. Try scanning again!';
+    document.getElementById('joinBtn').disabled=true;
+    return;
+  }
+  state.phase=data.phase;
+  state.roundIndex=data.round_index;
+  state.questionIndex=data.question_index;
+  setConn(true,'Connected');
+}
+
+async function joinGame(){
+  const name=document.getElementById('nameInput').value.trim();
+  if(!name){document.getElementById('joinErr').textContent='Type your name!';return;}
+  if(name.length<2){document.getElementById('joinErr').textContent='Name is too short!';return;}
+
+  document.getElementById('joinBtn').disabled=true;
+  document.getElementById('joinErr').textContent='';
+
+  const{data,error}=await sb.from('trivia_players').insert({
+    session_id:SESSION_ID, name:name.substring(0,20), score:0, streak:0
+  }).select().single();
+
+  if(error){
+    document.getElementById('joinErr').textContent='Could not join: '+error.message;
+    document.getElementById('joinBtn').disabled=false;
+    return;
+  }
+
+  state.player={id:data.id,name:data.name,score:0,streak:0};
+  document.getElementById('lobbyPlayerName').textContent=data.name;
+
+  subscribeToSession();
+  subscribeToPlayers();
+  syncToPhase(state.phase, state.roundIndex, state.questionIndex);
+}
+
+function subscribeToSession(){
+  sb.channel('play-session-'+SESSION_ID)
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'trivia_sessions',filter:`id=eq.${SESSION_ID}`},
+      payload=>syncToPhase(payload.new.phase, payload.new.round_index, payload.new.question_index))
+    .subscribe(status=>{
+      if(status==='SUBSCRIBED') setConn(true,'Live');
+      else if(status==='CHANNEL_ERROR') setConn(false,'Connection issue');
+    });
+}
+
+function subscribeToPlayers(){
+  sb.channel('play-players-'+SESSION_ID)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'trivia_players',filter:`session_id=eq.${SESSION_ID}`},
+      payload=>{
+        const el=document.getElementById('lobbyCount');
+        el.textContent=(parseInt(el.textContent)||0)+1;
+      })
+    .subscribe();
+  sb.from('trivia_players').select('id',{count:'exact',head:true}).eq('session_id',SESSION_ID)
+    .then(({count})=>{document.getElementById('lobbyCount').textContent=count||0;});
+}
+
+function syncToPhase(phase, ri, qi){
+  const prevQuestionKey = `${state.roundIndex}-${state.questionIndex}`;
+  const newQuestionKey = `${ri}-${qi}`;
+
+  state.phase = phase;
+  state.roundIndex = ri;
+  state.questionIndex = qi;
+
+  // Bug fix: reset answer state on every question change
+  if(prevQuestionKey !== newQuestionKey){
+    state.answeredKey = null;
+    state.myAnswerIndex = null;
+    state.myPtsEarned = 0;
+    state.submitting = false;
+  }
+
+  switch(phase){
+    case 'lobby':
+      showScreen('screenWaiting');
+      break;
+    case 'intro':
+      renderIntro(ri);
+      showScreen('screenIntro');
+      break;
+    case 'question':
+      if(state.answeredKey === newQuestionKey){
+        showScreen('screenSubmitted');
+      } else {
+        renderQuestion(ri, qi);
+        showScreen('screenQuestion');
+        state.questionStartedAt = Date.now();
+        startLocalTimer();
+      }
+      break;
+    case 'paused':
+      stopLocalTimer();
+      break;
+    case 'reveal':
+      stopLocalTimer();
+      renderReveal(ri, qi);
+      showScreen('screenReveal');
+      break;
+    case 'leaderboard':
+      stopLocalTimer();
+      // Distinguish intermission (round 0 done, more to go) from final
+      if(ri < CONFIG.rounds.length - 1){
+        renderIntermission();
+        showScreen('screenIntermission');
+      } else {
+        renderGameOver();
+        showScreen('screenOver');
+      }
+      break;
+    case 'gameover':
+      stopLocalTimer();
+      renderGameOver();
+      showScreen('screenOver');
+      break;
+  }
+}
+
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function renderIntro(ri){
+  const r = CONFIG.rounds[ri];
+  if(!r) return;
+  document.getElementById('introIcon').textContent=r.icon;
+  document.getElementById('introEye').textContent=`Round ${ri+1} of ${CONFIG.rounds.length}`;
+  document.getElementById('introName').textContent=r.name;
+  document.getElementById('introText').textContent=r.intro;
+}
+
+function renderQuestion(ri, qi){
+  const r=CONFIG.rounds[ri], q=r?.questions?.[qi];
+  if(!q) return;
+
+  // Compute global question number
+  let globalIdx = 0;
+  for(let i=0;i<ri;i++) globalIdx += CONFIG.rounds[i].questions.length;
+  globalIdx += qi;
+
+  document.getElementById('qNum').textContent=`Q${globalIdx+1}`;
+  document.getElementById('qCat').textContent=r.name;
+  document.getElementById('qPts').textContent=`${q.pts} PTS`;
+  document.getElementById('qText').textContent=q.q;
+
+  const list=document.getElementById('answersList');
+  list.innerHTML='';
+  q.answers.forEach((ans, i)=>{
+    const btn=document.createElement('button');
+    btn.className='ans-btn';
+    btn.dataset.index=i;
+    btn.innerHTML=`<div class="ans-letter">${LETTERS[i]}</div><div class="ans-text">${ans}</div>`;
+    btn.addEventListener('click',()=>handleAnswerClick(ri, qi, i));
+    list.appendChild(btn);
+  });
+}
+
+async function handleAnswerClick(ri, qi, answerIndex){
+  if(state.submitting) return;
+  if(state.phase !== 'question') return;
+  if(ri !== state.roundIndex || qi !== state.questionIndex) return;
+  const questionKey=`${ri}-${qi}`;
+  if(state.answeredKey === questionKey) return;
+
+  state.submitting = true;
+  state.answeredKey = questionKey;
+  state.myAnswerIndex = answerIndex;
+
+  document.querySelectorAll('.ans-btn').forEach(b=>{
+    if(parseInt(b.dataset.index) === answerIndex) b.classList.add('selected');
+    else b.classList.add('locked');
+  });
+
+  const q = CONFIG.rounds[ri].questions[qi];
+  const isCorrect = (answerIndex === q.correct);
+  let ptsEarned = 0;
+  if(isCorrect){
+    state.correctCount++;
+    const elapsed = state.questionStartedAt ? (Date.now()-state.questionStartedAt)/1000 : CONFIG.questionSecs;
+    const remaining = Math.max(0, CONFIG.questionSecs - elapsed);
+    const speedMult = 1 + 0.5 * (remaining / CONFIG.questionSecs);
+    ptsEarned = Math.round(q.pts * speedMult / 5) * 5;
+  }
+  state.myPtsEarned = ptsEarned;
+
+  const{error:ansErr}=await sb.from('trivia_answers').insert({
+    session_id: SESSION_ID,
+    player_id: state.player.id,
+    round_index: ri,
+    question_index: qi,
+    answer_index: answerIndex,
+    is_correct: isCorrect,
+    pts_earned: ptsEarned
+  });
+
+  if(ansErr){
+    showToast('Error saving: '+ansErr.message);
+    state.submitting = false;
+    state.answeredKey = null;
+    if(isCorrect) state.correctCount--;
+    document.querySelectorAll('.ans-btn').forEach(b=>{b.classList.remove('selected');b.classList.remove('locked');});
+    return;
+  }
+
+  const newScore = (state.player.score || 0) + ptsEarned;
+  const newStreak = isCorrect ? (state.player.streak || 0) + 1 : 0;
+  await sb.from('trivia_players').update({score:newScore, streak:newStreak}).eq('id', state.player.id);
+  state.player.score = newScore;
+  state.player.streak = newStreak;
+
+  state.submitting = false;
+  showScreen('screenSubmitted');
+
+  document.getElementById('subLetter').textContent=LETTERS[answerIndex];
+  document.getElementById('subText').textContent=q.answers[answerIndex];
+}
+
+function startLocalTimer(){
+  stopLocalTimer();
+  let secsLeft = CONFIG.questionSecs;
+  const numEl=document.getElementById('qTimerNum');
+  const fillEl=document.getElementById('qTimerFill');
+  function tick(){
+    numEl.textContent = secsLeft;
+    fillEl.style.width = ((secsLeft/CONFIG.questionSecs)*100)+'%';
+    const urgent = secsLeft <= 5;
+    numEl.classList.toggle('urgent', urgent);
+    fillEl.classList.toggle('urgent', urgent);
+    secsLeft--;
+    if(secsLeft < 0){ stopLocalTimer(); }
+  }
+  tick();
+  timerInt = setInterval(tick, 1000);
+}
+function stopLocalTimer(){
+  if(timerInt){ clearInterval(timerInt); timerInt=null; }
+}
+
+function renderReveal(ri, qi){
+  const q=CONFIG.rounds[ri]?.questions?.[qi];
+  if(!q) return;
+
+  const myIndex = state.myAnswerIndex;
+  const isCorrect = (myIndex === q.correct);
+  const didAnswer = (myIndex !== null && myIndex !== undefined);
+
+  const iconEl=document.getElementById('revIcon');
+  const resultEl=document.getElementById('revResult');
+  const ptsEl=document.getElementById('revPts');
+
+  if(!didAnswer){
+    iconEl.textContent='⏱'; iconEl.className='rev-icon';
+    resultEl.textContent='Time up!'; resultEl.className='rev-result wrong';
+    ptsEl.textContent='+0';
+    ptsEl.style.color='var(--dim)';
+  } else if(isCorrect){
+    iconEl.textContent='✓'; iconEl.className='rev-icon correct';
+    resultEl.textContent='Correct!'; resultEl.className='rev-result correct';
+    ptsEl.textContent=`+${state.myPtsEarned}`;
+    ptsEl.style.color='var(--yellow)';
+  } else {
+    iconEl.textContent='✗'; iconEl.className='rev-icon wrong';
+    resultEl.textContent='Oops!'; resultEl.className='rev-result wrong';
+    ptsEl.textContent='+0';
+    ptsEl.style.color='var(--dim)';
+  }
+
+  const yourRow=document.getElementById('revYour');
+  if(didAnswer){
+    yourRow.style.display='flex';
+    document.getElementById('revYourLetter').textContent=LETTERS[myIndex];
+    document.getElementById('revYourText').textContent=q.answers[myIndex];
+    yourRow.className=isCorrect?'rev-row correct':'rev-row wrong';
+  } else {
+    yourRow.style.display='none';
+  }
+
+  const corrRow=document.getElementById('revCorrect');
+  if(!isCorrect){
+    corrRow.style.display='flex';
+    document.getElementById('revCorrectLetter').textContent=LETTERS[q.correct];
+    document.getElementById('revCorrectText').textContent=q.answers[q.correct];
+  } else {
+    corrRow.style.display='none';
+  }
+}
+
+async function renderIntermission(){
+  document.getElementById('intYourPoints').textContent = (state.player.score || 0).toLocaleString();
+  // Get rank
+  const{data}=await sb.from('trivia_players').select('id,score').eq('session_id',SESSION_ID).order('score',{ascending:false});
+  const players = data || [];
+  const myRank = players.findIndex(p => p.id === state.player.id) + 1;
+  document.getElementById('intYourRank').textContent = myRank > 0 ? `Rank #${myRank} of ${players.length}` : 'Waiting...';
+
+  // Encouragement based on prize pace
+  const correctSoFar = state.correctCount;
+  const halfPrizeThreshold = Math.ceil(CONFIG.prizeThreshold / 2);
+  let msg = "Round 2 starts soon! Keep it up!";
+  if(correctSoFar >= halfPrizeThreshold) msg = `Great job! ${correctSoFar} right so far. You're on track for a prize!`;
+  else if(correctSoFar >= halfPrizeThreshold - 2) msg = `Almost on prize pace! ${correctSoFar} right so far. Round 2 is coming!`;
+  else msg = `${correctSoFar} right so far. Round 2 has bigger points — you can still win!`;
+  document.getElementById('intEncouragement').textContent = msg;
+}
+
+async function renderGameOver(){
+  const{data}=await sb.from('trivia_players').select('id,name,score').eq('session_id',SESSION_ID).order('score',{ascending:false});
+  const players = data || [];
+
+  document.getElementById('goCorrect').textContent = state.correctCount;
+  document.getElementById('goTotal').textContent = TOTAL_QUESTIONS;
+
+  const myRank = players.findIndex(p => p.id === state.player.id) + 1;
+  const winner = players[0];
+  let line = myRank > 0 ? `Rank #${myRank} of ${players.length}` : 'Thanks for playing!';
+  if(winner && winner.id === state.player.id) line = '🏆 You\'re #1!';
+  document.getElementById('goRankLine').textContent = line;
+
+  // Prize moment
+  const isPrize = state.correctCount >= CONFIG.prizeThreshold;
+  const goIcon = document.getElementById('goIconEl');
+  const goTitle = document.getElementById('goTitle');
+  const goFinal = document.getElementById('goFinalBox');
+  const goBanner = document.getElementById('goPrizeBanner');
+  const goThanks = document.getElementById('goThanks');
+
+  if(isPrize){
+    goIcon.textContent='🏆';
+    goIcon.className='go-prize-trophy';
+    goTitle.textContent='You Won!';
+    goFinal.classList.add('winner');
+    goBanner.style.display='block';
+    goThanks.textContent='See an adult to claim your prize!';
+  } else {
+    goIcon.textContent='🌟';
+    goIcon.className='go-trophy';
+    goTitle.textContent='Great Game!';
+    goFinal.classList.remove('winner');
+    goBanner.style.display='none';
+    goThanks.textContent='Thanks for playing! Maybe next time!';
+  }
+}
+
+function showToast(msg, ms=3000){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), ms);
+}
+
+document.getElementById('nameInput').addEventListener('keypress', e=>{
+  if(e.key==='Enter') joinGame();
+});
+
+init();
+</script>
+</body>
+</html>
