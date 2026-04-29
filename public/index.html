@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClubOS Kids Trivia — Ballantyne CC Swim Team</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Fredoka:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root{
+    --bg:#0A1F3A; --bg2:#0E2A4D; --bg3:#143866;
+    --yellow:#FFD23F; --teal:#00D9C0; --orange:#FF8C42;
+    --lime:#A8E063; --pink:#FF6B9D; --purple:#A855F7;
+    --white:#FFFFFF; --dim:rgba(255,255,255,0.6);
+    --faint:rgba(255,255,255,0.08); --sep:rgba(255,255,255,0.12);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Fredoka',sans-serif;background:var(--bg);width:1920px;height:1080px;overflow:hidden;color:var(--white);}
+
+  .bg-glow{position:fixed;inset:0;pointer-events:none;z-index:0;}
+  .glow-blob{position:absolute;border-radius:50%;filter:blur(140px);animation:blobDrift 14s ease-in-out infinite alternate;}
+  .glow-blob.a{width:900px;height:700px;background:var(--teal);top:-250px;left:-150px;opacity:0.25;}
+  .glow-blob.b{width:700px;height:600px;background:var(--orange);top:500px;right:-200px;opacity:0.18;animation-delay:-5s;}
+  .glow-blob.c{width:600px;height:400px;background:var(--yellow);bottom:-100px;left:700px;opacity:0.15;animation-delay:-10s;}
+  @keyframes blobDrift{from{transform:translate(0,0) scale(1)}to{transform:translate(50px,40px) scale(1.1)}}
+
+  .display-wrapper{position:relative;z-index:1;display:grid;grid-template-rows:96px 1fr 70px;height:1080px;width:1920px;}
+
+  /* HEADER */
+  .header{display:flex;align-items:center;justify-content:space-between;padding:0 52px;background:rgba(10,31,58,0.92);border-bottom:1px solid var(--sep);backdrop-filter:blur(24px);position:relative;}
+  .header::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--yellow),var(--orange),var(--pink),var(--teal),var(--lime),var(--yellow));background-size:300% 100%;animation:rainbow 4s linear infinite;}
+  @keyframes rainbow{0%{background-position:0%}100%{background-position:300%}}
+  .brand{display:flex;align-items:center;gap:16px;}
+  .brand-icon{width:60px;height:60px;background:linear-gradient(135deg,var(--yellow),var(--orange));border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:32px;box-shadow:0 4px 16px rgba(255,140,66,0.3);}
+  .brand-name{font-family:'Fredoka';font-weight:700;font-size:34px;color:var(--white);line-height:1;}
+  .brand-tag{font-size:13px;font-weight:500;color:var(--yellow);margin-top:4px;}
+  .hdr-center{position:absolute;left:50%;transform:translateX(-50%);text-align:center;}
+  .round-eye{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--teal);font-weight:700;margin-bottom:4px;}
+  .round-label{font-family:'Fredoka';font-weight:600;font-size:30px;color:var(--white);}
+  .hdr-right{display:flex;align-items:center;gap:20px;}
+  .live-time{font-family:'Bebas Neue';font-size:34px;color:var(--white);letter-spacing:2px;}
+  .time-lbl{font-size:11px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;text-align:right;margin-top:2px;}
+
+  .pause-btn{display:flex;align-items:center;gap:8px;background:rgba(255,210,63,0.15);border:1.5px solid rgba(255,210,63,0.4);border-radius:10px;padding:10px 18px;cursor:pointer;font-family:'Fredoka';font-weight:700;font-size:15px;letter-spacing:1px;color:var(--yellow);transition:all 0.2s;}
+  .pause-btn:hover{background:rgba(255,210,63,0.25);}
+  .pause-btn.paused{background:rgba(168,224,99,0.15);border-color:rgba(168,224,99,0.4);color:var(--lime);}
+
+  .main-grid{display:grid;grid-template-columns:1fr 420px;overflow:hidden;}
+  .question-area{padding:0 60px;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden;}
+  .screen{display:none;}
+  .screen.active{display:flex;flex-direction:column;height:100%;justify-content:center;}
+
+  .pause-overlay{position:absolute;inset:0;background:rgba(10,31,58,0.94);backdrop-filter:blur(12px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:20px;z-index:50;animation:fadeUp 0.3s ease both;}
+  .pause-overlay.active{display:flex;}
+  .pause-icon-big{font-size:90px;}
+  .pause-title-big{font-family:'Fredoka';font-weight:700;font-size:80px;color:var(--yellow);}
+  .pause-sub{font-size:20px;color:var(--dim);}
+
+  /* LOBBY */
+  .lobby{text-align:center;align-items:center;}
+  .lobby-icon{font-size:96px;margin-bottom:20px;animation:bounce 1.2s ease-in-out infinite alternate;}
+  @keyframes bounce{from{transform:translateY(0) scale(1)}to{transform:translateY(-16px) scale(1.06)}}
+  .lobby-title{font-family:'Fredoka';font-weight:700;font-size:104px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;}
+  .lobby-sub{font-size:26px;color:var(--white);margin-bottom:12px;font-weight:500;}
+  .lobby-count{font-family:'Bebas Neue';font-size:64px;color:var(--teal);letter-spacing:2px;margin-bottom:8px;text-shadow:0 0 30px rgba(0,217,192,0.4);}
+  .lobby-hint{font-size:18px;color:var(--dim);letter-spacing:1px;font-weight:500;}
+  .lobby-prize{margin-top:24px;background:rgba(255,210,63,0.12);border:2px solid rgba(255,210,63,0.4);border-radius:16px;padding:16px 32px;display:inline-flex;align-items:center;gap:12px;font-size:20px;color:var(--yellow);font-weight:600;}
+  .start-btn{margin-top:32px;background:linear-gradient(135deg,var(--orange),var(--pink));border:none;border-radius:18px;padding:24px 60px;font-family:'Fredoka';font-weight:700;font-size:32px;letter-spacing:1px;color:white;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 6px 20px rgba(255,107,157,0.4);}
+  .start-btn:hover,.start-btn:focus{transform:translateY(-3px);box-shadow:0 10px 30px rgba(255,107,157,0.5);outline:none;}
+
+  /* ROUND INTRO */
+  .round-intro{text-align:center;align-items:center;}
+  .ri-icon{font-size:120px;margin-bottom:20px;animation:bounce 1.2s ease-in-out infinite alternate;}
+  .ri-eye{font-size:14px;letter-spacing:6px;text-transform:uppercase;color:var(--teal);margin-bottom:14px;font-weight:700;}
+  .ri-title{font-family:'Fredoka';font-weight:700;font-size:108px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:20px;}
+  .ri-sub{font-size:24px;color:var(--white);max-width:760px;line-height:1.5;margin-bottom:32px;font-weight:500;}
+  .ri-countdown{font-family:'Fredoka';font-weight:700;font-size:26px;color:var(--orange);}
+
+  /* QUESTION */
+  .q-meta{display:flex;align-items:center;gap:16px;margin-bottom:28px;animation:fadeUp 0.45s ease both;}
+  .q-num{font-family:'Bebas Neue';font-size:20px;letter-spacing:3px;color:var(--orange);background:rgba(255,140,66,0.15);border:1.5px solid rgba(255,140,66,0.4);padding:6px 16px;border-radius:6px;}
+  .q-cat{font-family:'Fredoka';font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;color:var(--teal);}
+  .q-pts{margin-left:auto;font-family:'Bebas Neue';font-size:26px;color:var(--yellow);letter-spacing:2px;}
+  .q-text{font-family:'Fredoka';font-weight:700;font-size:64px;color:var(--white);line-height:1.15;margin-bottom:42px;animation:fadeUp 0.45s ease 0.08s both;max-width:1080px;}
+  .ans-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;animation:fadeUp 0.45s ease 0.16s both;}
+  .abtn{display:flex;align-items:center;gap:20px;background:var(--faint);border:2px solid var(--sep);border-radius:18px;padding:22px 26px;position:relative;overflow:hidden;transition:all 0.2s;}
+  .abtn.correct{background:rgba(168,224,99,0.18);border-color:var(--lime);animation:correctPop 0.5s ease;}
+  .abtn.wrong{background:rgba(255,107,157,0.06);border-color:rgba(255,107,157,0.18);opacity:0.45;}
+  @keyframes correctPop{0%,100%{transform:scale(1)}50%{transform:scale(1.03);box-shadow:0 0 50px rgba(168,224,99,0.4)}}
+  .aletter{width:48px;height:48px;border-radius:12px;background:var(--faint);border:2px solid var(--sep);display:flex;align-items:center;justify-content:center;font-family:'Fredoka';font-weight:700;font-size:26px;color:var(--teal);flex-shrink:0;transition:all 0.2s;}
+  .abtn.correct .aletter{background:var(--lime);border-color:var(--lime);color:#0A1F3A;}
+  .abtn.wrong .aletter{background:rgba(255,107,157,0.12);border-color:transparent;color:var(--pink);}
+  .atext{font-size:22px;font-weight:600;color:var(--white);line-height:1.3;}
+
+  /* TIMER */
+  .timer-zone{position:absolute;top:36px;right:0;display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .timer-ring{width:96px;height:96px;position:relative;}
+  .timer-ring svg{transform:rotate(-90deg);width:96px;height:96px;}
+  .timer-ring circle{fill:none;stroke-width:6;r:40;cx:48;cy:48;}
+  .timer-track{stroke:var(--faint);}
+  .timer-fill{stroke:var(--orange);stroke-linecap:round;stroke-dasharray:251;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear,stroke 0.5s;filter:drop-shadow(0 0 8px rgba(255,140,66,0.6));}
+  .timer-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:38px;color:var(--white);}
+  .timer-lbl{font-size:11px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;font-weight:600;}
+
+  /* REVEAL — minimal for kids, no fun fact paragraph */
+  .rev-icon-big{font-size:140px;text-align:center;margin-bottom:8px;animation:popIn 0.4s ease both;}
+  @keyframes popIn{0%{transform:scale(0.3);opacity:0}50%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+  .rev-text-big{font-family:'Fredoka';font-weight:700;font-size:88px;text-align:center;line-height:1;margin-bottom:24px;}
+  .rev-text-big.correct{color:var(--lime);text-shadow:0 0 40px rgba(168,224,99,0.5);}
+  .rev-text-big.wrong{color:var(--pink);}
+  .rev-answer-row{display:flex;align-items:center;justify-content:center;gap:20px;}
+  .rev-answer-pill{display:inline-flex;align-items:center;gap:18px;background:rgba(168,224,99,0.15);border:2.5px solid var(--lime);border-radius:20px;padding:20px 32px;}
+  .rev-answer-letter{width:56px;height:56px;border-radius:14px;background:var(--lime);color:#0A1F3A;display:flex;align-items:center;justify-content:center;font-family:'Fredoka';font-weight:700;font-size:30px;}
+  .rev-answer-text{font-family:'Fredoka';font-weight:600;font-size:38px;color:var(--white);}
+
+  /* INTERMISSION */
+  .intermission{text-align:center;align-items:center;}
+  .int-icon{font-size:120px;margin-bottom:16px;animation:bounce 1.2s ease-in-out infinite alternate;}
+  .int-title{font-family:'Fredoka';font-weight:700;font-size:104px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;}
+  .int-sub{font-size:26px;color:var(--white);font-weight:500;margin-bottom:36px;}
+  .int-leaders{display:flex;gap:20px;justify-content:center;margin-bottom:32px;}
+  .int-leader{background:var(--faint);border:2px solid var(--sep);border-radius:20px;padding:24px 32px;min-width:200px;}
+  .int-leader.gold{background:rgba(255,210,63,0.12);border-color:var(--yellow);}
+  .int-leader.silver{background:rgba(200,200,200,0.08);border-color:rgba(200,200,200,0.3);}
+  .int-leader.bronze{background:rgba(255,140,66,0.12);border-color:var(--orange);}
+  .int-medal{font-size:40px;margin-bottom:6px;}
+  .int-leader-name{font-family:'Fredoka';font-weight:600;font-size:22px;color:var(--white);margin-bottom:4px;}
+  .int-leader-score{font-family:'Bebas Neue';font-size:32px;color:var(--yellow);letter-spacing:2px;}
+  .int-countdown{font-family:'Fredoka';font-weight:700;font-size:24px;color:var(--orange);}
+
+  /* GAME OVER */
+  .game-over{text-align:center;align-items:center;}
+  .go-trophy{font-size:140px;margin-bottom:20px;animation:bounce 1.2s ease-in-out infinite alternate;}
+  .go-title{font-family:'Fredoka';font-weight:700;font-size:120px;line-height:1;background:linear-gradient(135deg,var(--yellow),var(--orange),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:16px;}
+  .go-winner{font-size:30px;color:var(--white);margin-bottom:32px;font-weight:500;}
+  .go-winner b{color:var(--yellow);font-size:36px;}
+  .go-restart{font-size:14px;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-top:24px;font-weight:600;}
+
+  /* LEADERBOARD (final + standalone) */
+  .lb-title{font-family:'Fredoka';font-weight:700;font-size:64px;background:linear-gradient(135deg,var(--yellow),var(--pink));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeUp 0.4s ease both;}
+  .lb-sub{font-size:14px;color:var(--dim);letter-spacing:3px;text-transform:uppercase;margin-bottom:30px;animation:fadeUp 0.4s ease 0.06s both;font-weight:600;}
+  .lb-list{display:flex;flex-direction:column;gap:12px;}
+  .lb-row{display:flex;align-items:center;gap:20px;background:var(--faint);border:2px solid var(--sep);border-radius:16px;padding:16px 26px;position:relative;overflow:hidden;}
+  .lb-row.gold{background:rgba(255,210,63,0.12);border-color:var(--yellow);}
+  .lb-row.silver{background:rgba(200,200,200,0.06);border-color:rgba(200,200,200,0.2);}
+  .lb-row.bronze{background:rgba(255,140,66,0.12);border-color:var(--orange);}
+  .lb-row.winner{background:rgba(168,224,99,0.1);border-color:var(--lime);}
+  .lb-rank{font-family:'Bebas Neue';font-size:38px;min-width:50px;text-align:center;color:var(--dim);}
+  .lb-row.gold .lb-rank{color:var(--yellow);text-shadow:0 0 20px rgba(255,210,63,0.5);}
+  .lb-row.silver .lb-rank{color:#C0C0C0;}
+  .lb-row.bronze .lb-rank{color:var(--orange);}
+  .lb-name{flex:1;font-size:24px;font-weight:600;color:var(--white);font-family:'Fredoka';}
+  .lb-row.gold .lb-name{font-size:28px;}
+  .lb-prize{font-size:13px;color:var(--lime);background:rgba(168,224,99,0.15);border-radius:20px;padding:4px 12px;font-weight:700;letter-spacing:0.5px;}
+  .lb-score{font-family:'Bebas Neue';font-size:38px;color:var(--teal);letter-spacing:2px;min-width:90px;text-align:right;}
+  .lb-row.gold .lb-score{font-size:46px;color:var(--yellow);}
+
+  /* RIGHT PANEL */
+  .right-panel{background:rgba(14,42,77,0.85);border-left:1px solid var(--sep);display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(12px);}
+  .qr-section{padding:24px 26px;border-bottom:1px solid var(--sep);display:flex;flex-direction:column;align-items:center;gap:12px;flex-shrink:0;}
+  .qr-eye{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--orange);font-weight:700;}
+  #qrCanvas{width:200px;height:200px;background:white;border-radius:14px;padding:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  #qrCanvas img,#qrCanvas canvas{width:184px!important;height:184px!important;}
+  #qrUrl{font-size:10px;color:rgba(255,255,255,0.3);text-align:center;word-break:break-all;max-width:200px;line-height:1.5;}
+  .qr-hint{font-size:13px;color:var(--white);text-align:center;font-weight:600;}
+  .panel-section{padding:18px 22px;border-bottom:1px solid var(--sep);flex-shrink:0;}
+  .panel-eye{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--orange);font-weight:700;margin-bottom:14px;}
+  .stats-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-box{background:var(--faint);border:1.5px solid var(--sep);border-radius:12px;padding:14px 16px;}
+  .stat-val{font-family:'Bebas Neue';font-size:34px;letter-spacing:1px;line-height:1;}
+  .stat-val.orange{color:var(--orange)}.stat-val.teal{color:var(--teal)}.stat-val.yellow{color:var(--yellow)}.stat-val.lime{color:var(--lime)}
+  .stat-lbl{font-size:11px;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-top:3px;font-weight:600;}
+  .progress-tracker{display:flex;gap:4px;flex-wrap:wrap;}
+  .progress-pip{width:18px;height:8px;border-radius:4px;background:var(--faint);border:1px solid var(--sep);transition:all 0.5s;}
+  .progress-pip.active{background:var(--teal);border-color:var(--teal);box-shadow:0 0 8px rgba(0,217,192,0.5);}
+  .progress-pip.done{background:var(--lime);border-color:var(--lime);}
+  .activity-section{flex:1;overflow:hidden;padding:18px 22px;display:flex;flex-direction:column;}
+  .activity-feed{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:10px;}
+  .activity-item{display:flex;align-items:center;gap:12px;background:rgba(20,56,102,0.7);border-radius:12px;padding:10px 14px;border:1.5px solid var(--sep);animation:slideIn 0.35s ease both;flex-shrink:0;}
+  @keyframes slideIn{from{opacity:0;transform:translateX(16px)}to{opacity:1;transform:translateX(0)}}
+  .av{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0A1F3A;flex-shrink:0;font-family:'Fredoka';}
+  .av-name{font-family:'Fredoka';font-size:15px;font-weight:600;color:var(--white);flex:1;}
+  .av-action{font-size:12px;color:var(--dim);}
+  .av-pts{font-family:'Bebas Neue';font-size:18px;color:var(--lime);letter-spacing:1px;}
+
+  /* FOOTER */
+  .footer{background:rgba(10,31,58,0.95);border-top:1px solid var(--sep);display:flex;align-items:center;justify-content:space-between;padding:0 52px;backdrop-filter:blur(20px);}
+  .footer-center{font-size:14px;color:var(--white);display:flex;align-items:center;gap:12px;font-weight:500;}
+  .fdot{width:5px;height:5px;border-radius:50%;background:var(--yellow);}
+  .clubos-lockup{display:flex;flex-direction:column;align-items:flex-end;gap:2px;}
+  .clubos-powered{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.3);font-weight:600;}
+  .clubos-wordmark{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:600;letter-spacing:0.04em;color:rgba(255,255,255,0.5);}
+  .clubos-wordmark span{color:rgba(255,210,63,0.7);}
+  .key-hint{font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;}
+  .key-hint kbd{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:4px;padding:1px 6px;font-size:11px;font-family:'DM Sans';}
+
+  /* CONFETTI */
+  .cfwrap{position:fixed;inset:0;pointer-events:none;z-index:100;overflow:hidden;}
+  .cp{position:absolute;width:11px;height:11px;top:-20px;opacity:0;animation:cfFall linear forwards;border-radius:2px;}
+  @keyframes cfFall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:0;transform:translateY(1200px) rotate(720deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+  .err-banner{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--pink);color:white;padding:12px 24px;border-radius:8px;font-size:13px;font-weight:600;z-index:200;display:none;}
+</style>
+</head>
+<body>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONFIG — Kids Trivia for Ballantyne CC Swim Team Kickoff
+// ═══════════════════════════════════════════════════════════════
+const CONFIG={
+  supabaseUrl:'https://ykfvwqewnfnibpzytspn.supabase.co',
+  supabaseKey:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrZnZ3cWV3bmZuaWJwenl0c3BuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4MjE2NzYsImV4cCI6MjA5MDM5NzY3Nn0.cnMztZVHDV3Hof-26aRi4NIM7wKwjzxAfoMBR3oItms',
+  clubSlug:'ballantyne-cc-kids',
+  footerMsg:'Ballantyne CC Swim Team Kickoff · Get 15+ right to win a prize!',
+  prizeThreshold:15,
+  questionSecs:20,
+  revealSecs:4,
+  introCDSecs:6,
+  intermissionSecs:18,
+  rounds:[
+    {name:'Wild Things & More',icon:'🦁',intro:"Animals, movies, and silly stuff! Get those fingers ready.",questions:[
+      // Wild things / animals
+      {q:"What do you call a baby kangaroo?",answers:["Cub","Joey","Pup","Kit"],correct:1,pts:100},
+      {q:"Which animal is the king of the jungle?",answers:["Tiger","Elephant","Lion","Gorilla"],correct:2,pts:100},
+      {q:"How many legs does a spider have?",answers:["6","7","8","10"],correct:2,pts:100},
+      {q:"What is the largest animal on Earth?",answers:["Elephant","Blue Whale","Giraffe","Great White Shark"],correct:1,pts:100},
+      {q:"Which animal can change its color to blend in?",answers:["Dolphin","Penguin","Chameleon","Owl"],correct:2,pts:100},
+      {q:"What do bees make?",answers:["Milk","Honey","Bread","Butter"],correct:1,pts:100},
+      // Disney/Pixar
+      {q:"Who is the main character in 'Finding Nemo'?",answers:["A puppy","A clownfish","A turtle","A crab"],correct:1,pts:100},
+      {q:"What kind of toy is Buzz Lightyear from 'Toy Story'?",answers:["A cowboy","A space ranger","A robot","A dinosaur"],correct:1,pts:100},
+      {q:"In 'Frozen', what is the name of Elsa's sister?",answers:["Belle","Moana","Anna","Ariel"],correct:2,pts:100},
+      {q:"What color is Lightning McQueen in 'Cars'?",answers:["Blue","Yellow","Red","Green"],correct:2,pts:100},
+      // Pool / summer
+      {q:"What do you wear on your eyes when swimming?",answers:["Goggles","Sunglasses","A mask","Glasses"],correct:0,pts:100},
+      {q:"Which of these is a swimming stroke?",answers:["Butterfly","Caterpillar","Beetle","Worm"],correct:0,pts:100},
+      {q:"What helps you float in the pool?",answers:["A rock","A pool noodle","A bowling ball","A book"],correct:1,pts:100},
+      // Easier mix
+      {q:"What sound does a cow make?",answers:["Woof","Meow","Moo","Quack"],correct:2,pts:100},
+      {q:"Which of these is a fruit?",answers:["Carrot","Apple","Lettuce","Potato"],correct:1,pts:100}
+    ]},
+    {name:'Pirates, 80s & Tricky',icon:'🏴‍☠️',intro:"Pirates, throwbacks, and a few brain-twisters. Earn extra points!",questions:[
+      // Pirates
+      {q:"What do pirates say to greet each other?",answers:["Hello","Ahoy!","Howdy","Hi-ya"],correct:1,pts:150},
+      {q:"What do pirates often hunt for?",answers:["Sandwiches","Treasure","Books","Vegetables"],correct:1,pts:150},
+      {q:"What do pirates wear over one eye?",answers:["A pirate patch","A bandana","A hat","Sunglasses"],correct:0,pts:150},
+      {q:"What is the name of a pirate's flag?",answers:["The Big Black","The Jolly Roger","The Skull Ship","The Red Cross"],correct:1,pts:150},
+      // 80s — kid-accessible
+      {q:"In the 80s movie 'E.T.', what kind of creature was E.T.?",answers:["A dog","An alien","A monster","A robot"],correct:1,pts:200},
+      {q:"What was the famous 80s arcade game where you eat dots and run from ghosts?",answers:["Tetris","Pac-Man","Donkey Kong","Frogger"],correct:1,pts:200},
+      {q:"What does Mario try to save in his classic video games?",answers:["A castle","A princess","A treasure","A puppy"],correct:1,pts:200},
+      {q:"Which 80s movie has a flying DeLorean car that travels through time?",answers:["Star Wars","Back to the Future","Ghostbusters","The Goonies"],correct:1,pts:200},
+      // Mixed harder
+      {q:"How many planets are in our solar system?",answers:["6","7","8","9"],correct:2,pts:200},
+      {q:"What is the capital of the United States?",answers:["New York","Los Angeles","Washington, D.C.","Chicago"],correct:2,pts:200},
+      {q:"How many sides does a triangle have?",answers:["2","3","4","5"],correct:1,pts:100},
+      {q:"What is the tallest mountain in the world?",answers:["Mount Everest","Mount Fuji","Mount Kilimanjaro","Mount Rushmore"],correct:0,pts:200},
+      {q:"Which planet is closest to the sun?",answers:["Earth","Mars","Mercury","Venus"],correct:2,pts:200},
+      // The OrhanQ — the laugh moment
+      {q:"How old is Orhan, the Ballantyne FAC Director?",answers:["44","49","54","59"],correct:2,pts:300},
+      // Bonus silly — PLACEHOLDER for Orhan to swap in his own
+      {q:"What color is the Cabana umbrella at Ballantyne?",answers:["Red","Green","Blue","White"],correct:1,pts:200}
+    ]}
+  ]
+};
+</script>
+
+<div class="bg-glow"><div class="glow-blob a"></div><div class="glow-blob b"></div><div class="glow-blob c"></div></div>
+<div class="cfwrap" id="cfWrap"></div>
+<div class="err-banner" id="errBanner"></div>
+
+<div class="display-wrapper">
+  <header class="header">
+    <div class="brand">
+      <div class="brand-icon">🎉</div>
+      <div>
+        <div class="brand-name">Kids Trivia</div>
+        <div class="brand-tag">Swim Team Kickoff · Ballantyne CC</div>
+      </div>
+    </div>
+    <div class="hdr-center">
+      <div class="round-eye">Now Playing</div>
+      <div class="round-label" id="roundLabel">—</div>
+    </div>
+    <div class="hdr-right">
+      <button class="pause-btn" id="pauseBtn" onclick="togglePause()" style="display:none">⏸ PAUSE</button>
+      <div>
+        <div class="live-time" id="liveTime">—</div>
+        <div class="time-lbl">Time</div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <div class="question-area" style="position:relative;">
+
+      <div class="pause-overlay" id="pauseOverlay">
+        <div class="pause-icon-big">⏸</div>
+        <div class="pause-title-big">Paused</div>
+        <div class="pause-sub">Press Space to keep playing</div>
+      </div>
+
+      <div class="screen lobby" id="screenLobby">
+        <div class="lobby-icon">🎉</div>
+        <div class="lobby-title">Kids Trivia!</div>
+        <div class="lobby-sub">Scan the QR code to play on your phone!</div>
+        <div class="lobby-count" id="lobbyCount">0</div>
+        <div class="lobby-hint">Players Ready</div>
+        <div class="lobby-prize">🏆 Get 15+ right to win a prize!</div>
+        <button class="start-btn" id="startBtn" onclick="startGame()">Let's Play!</button>
+      </div>
+
+      <div class="screen round-intro" id="screenIntro">
+        <div class="ri-icon" id="riIcon">🎵</div>
+        <div class="ri-eye" id="riEye">Round 1 of 2</div>
+        <div class="ri-title" id="riTitle">—</div>
+        <div class="ri-sub" id="riSub">—</div>
+        <div class="ri-countdown" id="riCountdown">Starting in 6…</div>
+      </div>
+
+      <div class="screen" id="screenQuestion">
+        <div class="q-meta">
+          <div class="q-num" id="qNum">Q1</div>
+          <div class="q-cat" id="qCat">—</div>
+          <div class="q-pts" id="qPts">100 PTS</div>
+        </div>
+        <div class="q-text" id="qText">—</div>
+        <div class="ans-grid" id="ansGrid"></div>
+        <div class="timer-zone">
+          <div class="timer-ring">
+            <svg viewBox="0 0 96 96"><circle class="timer-track" cx="48" cy="48" r="40"/><circle class="timer-fill" id="timerFill" cx="48" cy="48" r="40"/></svg>
+            <div class="timer-num" id="timerNum">20</div>
+          </div>
+          <div class="timer-lbl">Seconds</div>
+        </div>
+      </div>
+
+      <div class="screen game-over" id="screenReveal" style="justify-content:center;">
+        <div class="rev-icon-big" id="revIcon">✓</div>
+        <div class="rev-text-big correct" id="revText">CORRECT!</div>
+        <div class="rev-answer-pill">
+          <div class="rev-answer-letter" id="revLetter">A</div>
+          <div class="rev-answer-text" id="revAnswerText">—</div>
+        </div>
+      </div>
+
+      <div class="screen intermission" id="screenIntermission">
+        <div class="int-icon">🌟</div>
+        <div class="int-title">Halfway There!</div>
+        <div class="int-sub">Top players so far…</div>
+        <div class="int-leaders" id="intLeaders"></div>
+        <div class="int-countdown" id="intCountdown">Round 2 starts in 18…</div>
+      </div>
+
+      <div class="screen" id="screenLB">
+        <div class="lb-title" id="lbTitle">🏆 Final Scores!</div>
+        <div class="lb-sub" id="lbSub">Prize winners get 15+ right</div>
+        <div class="lb-list" id="lbList"></div>
+      </div>
+
+      <div class="screen game-over" id="screenOver">
+        <div class="go-trophy">🏆</div>
+        <div class="go-title">Trivia Champion!</div>
+        <div class="go-winner">Tonight's #1: <b id="winnerName">—</b></div>
+        <div class="lb-list" id="goList" style="width:100%;max-width:920px;animation:fadeUp 0.4s ease 0.2s both;"></div>
+        <div class="go-restart" id="goRestart" style="margin-top:24px;">—</div>
+      </div>
+
+    </div>
+
+    <div class="right-panel">
+      <div class="qr-section">
+        <div class="qr-eye">Scan to Play!</div>
+        <div id="qrCanvas"></div>
+        <div id="qrUrl"></div>
+        <div class="qr-hint">No app needed!</div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-eye">Live Stats</div>
+        <div class="stats-row">
+          <div class="stat-box"><div class="stat-val orange" id="statPlayers">0</div><div class="stat-lbl">Players</div></div>
+          <div class="stat-box"><div class="stat-val teal" id="statAnswers">0</div><div class="stat-lbl">Answers</div></div>
+          <div class="stat-box"><div class="stat-val yellow" id="statQ">0/30</div><div class="stat-lbl">Question</div></div>
+          <div class="stat-box"><div class="stat-val lime" id="statPrize">0</div><div class="stat-lbl">Prize Pace</div></div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-eye">Progress</div>
+        <div class="progress-tracker" id="progressTracker"></div>
+      </div>
+      <div class="activity-section">
+        <div class="panel-eye">Live Activity</div>
+        <div class="activity-feed" id="actFeed"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="key-hint"><kbd>Space</kbd> Pause &nbsp; <kbd>Enter</kbd> Start</div>
+    <div class="footer-center"><div class="fdot"></div><span id="footerMsg">—</span><div class="fdot"></div></div>
+    <div class="clubos-lockup">
+      <div class="clubos-powered">Powered by</div>
+      <div class="clubos-wordmark">Club<span>OS</span></div>
+    </div>
+  </footer>
+</div>
+
+<script>
+const LETTERS=['A','B','C','D'],CIRCUM=2*Math.PI*40;
+const AV_COLORS=['#FFD23F','#00D9C0','#FF8C42','#A8E063','#FF6B9D','#A855F7'];
+const TOTAL_QUESTIONS = CONFIG.rounds.reduce((sum,r)=>sum+r.questions.length, 0);
+
+document.getElementById('footerMsg').textContent=CONFIG.footerMsg;
+
+// Build progress pips for all questions across all rounds
+const pt=document.getElementById('progressTracker');
+let pipNum=0;
+CONFIG.rounds.forEach((r,ri)=>{
+  r.questions.forEach((_,qi)=>{
+    const p=document.createElement('div');p.className='progress-pip';p.id=`pip-${pipNum++}`;pt.appendChild(p);
+  });
+});
+
+setInterval(()=>document.getElementById('liveTime').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}),1000);
+document.getElementById('liveTime').textContent=new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+
+function showErr(msg){const b=document.getElementById('errBanner');b.textContent=msg;b.style.display='block';setTimeout(()=>b.style.display='none',6000);}
+
+const sb=supabase.createClient(CONFIG.supabaseUrl,CONFIG.supabaseKey);
+let sessionId=null,playerCount=0,answerCount=0,prizePaceCount=0;
+let isPaused=false,currentRi=0,currentQi=0;
+
+async function initSession(){
+  try{
+    const{data,error}=await sb.from('trivia_sessions').insert({club_slug:CONFIG.clubSlug,phase:'lobby',round_index:0,question_index:0}).select().single();
+    if(error){showErr('DB error: '+error.message);return;}
+    sessionId=data.id;
+    const playUrl=`${window.location.origin}/play.html?s=${sessionId}`;
+    document.getElementById('qrUrl').textContent=playUrl.replace('https://','');
+    new QRCode(document.getElementById('qrCanvas'),{text:playUrl,width:184,height:184,colorDark:'#0A1F3A',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+
+    sb.channel('players-'+sessionId).on('postgres_changes',{event:'INSERT',schema:'public',table:'trivia_players',filter:`session_id=eq.${sessionId}`},p=>onPlayerJoined(p.new)).subscribe();
+    sb.channel('session-cmds-'+sessionId).on('postgres_changes',{event:'UPDATE',schema:'public',table:'trivia_sessions',filter:`id=eq.${sessionId}`},p=>onSessionUpdate(p.new)).subscribe();
+
+    showScreen('screenLobby');
+  }catch(e){showErr('Connection failed');console.error(e);}
+}
+
+function onSessionUpdate(s){
+  if(s.phase==='paused'&&!isPaused) doPause();
+  else if(s.phase==='question'&&isPaused) doResume();
+}
+
+function onPlayerJoined(player){
+  playerCount++;
+  document.getElementById('statPlayers').textContent=playerCount;
+  document.getElementById('lobbyCount').textContent=playerCount;
+  addActivity(player.name,AV_COLORS[playerCount%AV_COLORS.length],'Joined the game! 🎉',null);
+}
+
+function onAnswerIn(answer){
+  answerCount++;
+  document.getElementById('statAnswers').textContent=answerCount;
+}
+
+async function updatePrizePace(){
+  // Count players with score that would put them on pace for 15+ correct
+  const{data}=await sb.from('trivia_players').select('score').eq('session_id',sessionId);
+  if(!data) return;
+  // Rough estimate: avg ~150pts/correct (mix of 100/150/200), so 15 correct ≈ 2250pts
+  // Use prorated threshold based on questions answered so far
+  const questionsAnswered = (currentRi * CONFIG.rounds[0].questions.length) + currentQi + 1;
+  const proratedThreshold = (CONFIG.prizeThreshold / TOTAL_QUESTIONS) * questionsAnswered * 150;
+  prizePaceCount = data.filter(p => (p.score||0) >= proratedThreshold).length;
+  document.getElementById('statPrize').textContent = prizePaceCount;
+}
+
+async function updatePhase(phase,ri,qi){
+  if(!sessionId)return;
+  await sb.from('trivia_sessions').update({phase,round_index:ri,question_index:qi,updated_at:new Date().toISOString()}).eq('id',sessionId);
+}
+
+async function fetchLB(){
+  const{data}=await sb.from('trivia_players').select('id,name,score,streak').eq('session_id',sessionId).order('score',{ascending:false}).limit(10);
+  return data||[];
+}
+
+function showScreen(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');}
+function updateProgressPips(globalIndex){
+  // Each pip represents one question across the whole game
+  for(let i=0;i<TOTAL_QUESTIONS;i++){
+    const p=document.getElementById(`pip-${i}`);
+    if(!p)continue;
+    p.className='progress-pip';
+    if(i<globalIndex)p.classList.add('done');
+    else if(i===globalIndex)p.classList.add('active');
+  }
+  document.getElementById('statQ').textContent=`${globalIndex+1}/${TOTAL_QUESTIONS}`;
+}
+
+function getGlobalIndex(ri,qi){
+  let idx=0;
+  for(let r=0;r<ri;r++) idx += CONFIG.rounds[r].questions.length;
+  return idx + qi;
+}
+
+function addActivity(name,color,action,pts){const f=document.getElementById('actFeed');const el=document.createElement('div');el.className='activity-item';el.innerHTML=`<div class="av" style="background:${color}">${name.substring(0,2).toUpperCase()}</div><div style="flex:1"><div class="av-name">${name}</div><div class="av-action">${action}</div></div>${pts?`<div class="av-pts">+${pts}</div>`:''}`;f.insertBefore(el,f.firstChild);while(f.children.length>9)f.removeChild(f.lastChild);}
+function confetti(n=50){const clrs=['#FFD23F','#00D9C0','#FF8C42','#A8E063','#FF6B9D','#A855F7'];const w=document.getElementById('cfWrap');for(let i=0;i<n;i++){const p=document.createElement('div');p.className='cp';p.style.cssText=`left:${Math.random()*100}%;background:${clrs[Math.floor(Math.random()*clrs.length)]};width:${Math.random()*8+6}px;height:${Math.random()*8+6}px;animation-duration:${Math.random()*2+2.5}s;animation-delay:${Math.random()*0.6}s;border-radius:${Math.random()>.5?'50%':'2px'};`;w.appendChild(p);setTimeout(()=>p.remove(),5000);}}
+
+let timerInt=null,timerVal=0;
+function startTimer(secs,onEnd){
+  clearInterval(timerInt);
+  timerVal=secs;
+  const fill=document.getElementById('timerFill'),num=document.getElementById('timerNum');
+  fill.style.strokeDasharray=CIRCUM;
+  function tick(){
+    if(isPaused)return;
+    fill.style.strokeDashoffset=CIRCUM*(1-timerVal/secs);
+    fill.style.stroke=timerVal<=5?'var(--pink)':'var(--orange)';
+    fill.style.filter=timerVal<=5?'drop-shadow(0 0 10px rgba(255,107,157,0.8))':'drop-shadow(0 0 8px rgba(255,140,66,0.6))';
+    num.textContent=timerVal;
+    timerVal--;
+    if(timerVal<0){clearInterval(timerInt);onEnd();}
+  }
+  tick();timerInt=setInterval(tick,1000);
+}
+function stopTimer(){clearInterval(timerInt);}
+
+async function renderLB(cid,limit=10){
+  const players=await fetchLB();
+  const medals=['🥇','🥈','🥉'],cls=['gold','silver','bronze'];
+  document.getElementById(cid).innerHTML=players.slice(0,limit).map((p,i)=>{
+    const correctCount = Math.round((p.score||0)/150); // rough estimate
+    const isWinner = correctCount >= CONFIG.prizeThreshold;
+    return `<div class="lb-row ${cls[i]||''} ${isWinner?'winner':''}" style="animation:fadeUp 0.4s ease ${i*0.07}s both"><div class="lb-rank">${i+1}</div>${i<3?`<span style="font-size:30px">${medals[i]}</span>`:''}<div class="lb-name">${p.name}</div>${isWinner?`<div class="lb-prize">🏆 PRIZE</div>`:''}<div class="lb-score">${(p.score||0).toLocaleString()}</div></div>`;
+  }).join('');
+  return players;
+}
+
+function doPause(){
+  isPaused=true;
+  document.getElementById('pauseOverlay').classList.add('active');
+  const btn=document.getElementById('pauseBtn');
+  btn.textContent='▶ RESUME';btn.classList.add('paused');
+}
+function doResume(){
+  isPaused=false;
+  document.getElementById('pauseOverlay').classList.remove('active');
+  const btn=document.getElementById('pauseBtn');
+  btn.textContent='⏸ PAUSE';btn.classList.remove('paused');
+}
+async function togglePause(){
+  if(!sessionId)return;
+  if(isPaused){
+    doResume();
+    await updatePhase('question',currentRi,currentQi);
+  } else {
+    doPause();
+    await sb.from('trivia_sessions').update({phase:'paused',updated_at:new Date().toISOString()}).eq('id',sessionId);
+  }
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'||e.key===' '){
+    e.preventDefault();
+    const qScreen=document.getElementById('screenQuestion');
+    if(qScreen.classList.contains('active')) togglePause();
+  }
+  if(e.code==='Enter'||e.key==='Enter'){
+    const lobby=document.getElementById('screenLobby');
+    if(lobby.classList.contains('active')) startGame();
+  }
+});
+
+function startGame(){runIntro(0);}
+
+function runIntro(ri){
+  const r=CONFIG.rounds[ri];
+  currentRi=ri;
+  document.getElementById('roundLabel').textContent=`Round ${ri+1} — ${r.name}`;
+  document.getElementById('riIcon').textContent=r.icon;
+  document.getElementById('riEye').textContent=`Round ${ri+1} of ${CONFIG.rounds.length}`;
+  document.getElementById('riTitle').textContent=r.name;
+  document.getElementById('riSub').textContent=r.intro;
+  document.getElementById('pauseBtn').style.display='none';
+  showScreen('screenIntro');
+  updatePhase('intro',ri,0);
+  let c=CONFIG.introCDSecs;
+  const el=document.getElementById('riCountdown');
+  el.textContent=`Starting in ${c}…`;
+  const ct=setInterval(()=>{c--;el.textContent=`Starting in ${c}…`;if(c<=0){clearInterval(ct);runQuestion(ri,0);}},1000);
+}
+
+function runQuestion(ri,qi){
+  const r=CONFIG.rounds[ri],q=r.questions[qi];
+  if(!q){
+    // End of round
+    if(ri < CONFIG.rounds.length-1){
+      runIntermission(ri);
+    } else {
+      showFinalLB();
+    }
+    return;
+  }
+  currentRi=ri;currentQi=qi;
+  answerCount=0;
+  document.getElementById('statAnswers').textContent='0';
+
+  const globalIdx = getGlobalIndex(ri, qi);
+  updateProgressPips(globalIdx);
+
+  document.getElementById('qNum').textContent=`Q${globalIdx+1}`;
+  document.getElementById('qCat').textContent=r.name;
+  document.getElementById('qPts').textContent=`${q.pts} PTS`;
+  document.getElementById('qText').textContent=q.q;
+  document.getElementById('ansGrid').innerHTML=q.answers.map((a,i)=>`<div class="abtn"><div class="aletter">${LETTERS[i]}</div><div class="atext">${a}</div></div>`).join('');
+  document.getElementById('pauseBtn').style.display='flex';
+
+  const ch=sb.channel('q-answers-'+sessionId+'-'+ri+'-'+qi);
+  ch.on('postgres_changes',{event:'INSERT',schema:'public',table:'trivia_answers',filter:`session_id=eq.${sessionId}`},p=>{
+    if(p.new.round_index===ri&&p.new.question_index===qi) onAnswerIn(p.new);
+  }).subscribe();
+
+  showScreen('screenQuestion');
+  updatePhase('question',ri,qi);
+  startTimer(CONFIG.questionSecs,()=>{ch.unsubscribe();runReveal(ri,qi);});
+}
+
+async function runReveal(ri,qi){
+  const r=CONFIG.rounds[ri],q=r.questions[qi];
+  stopTimer();
+  document.getElementById('pauseBtn').style.display='none';
+
+  // Big simple reveal — kid friendly, no fun fact
+  document.getElementById('revIcon').textContent='✓';
+  document.getElementById('revText').textContent='ANSWER!';
+  document.getElementById('revText').className='rev-text-big correct';
+  document.getElementById('revLetter').textContent=LETTERS[q.correct];
+  document.getElementById('revAnswerText').textContent=q.answers[q.correct];
+
+  showScreen('screenReveal');
+  updatePhase('reveal',ri,qi);
+  await updatePrizePace();
+  if(Math.random()>0.6) confetti(30);
+  setTimeout(()=>runQuestion(ri,qi+1),CONFIG.revealSecs*1000);
+}
+
+async function runIntermission(ri){
+  document.getElementById('pauseBtn').style.display='none';
+  const players = await fetchLB();
+  const top3 = players.slice(0,3);
+  const medals=['🥇','🥈','🥉'];
+  const cls=['gold','silver','bronze'];
+  document.getElementById('intLeaders').innerHTML = top3.map((p,i)=>`
+    <div class="int-leader ${cls[i]}">
+      <div class="int-medal">${medals[i]}</div>
+      <div class="int-leader-name">${p.name}</div>
+      <div class="int-leader-score">${(p.score||0).toLocaleString()}</div>
+    </div>
+  `).join('') || '<div style="color:var(--dim);font-size:20px;">Waiting for scores...</div>';
+
+  showScreen('screenIntermission');
+  updatePhase('leaderboard',ri,0);
+  confetti(40);
+
+  let c = CONFIG.intermissionSecs;
+  const el = document.getElementById('intCountdown');
+  el.textContent=`Round 2 starts in ${c}…`;
+  const ct=setInterval(()=>{c--;el.textContent=`Round 2 starts in ${c}…`;if(c<=0){clearInterval(ct);runIntro(ri+1);}},1000);
+}
+
+async function showFinalLB(){
+  const players = await renderLB('lbList',10);
+  document.getElementById('lbTitle').textContent='🏆 Final Scores!';
+  document.getElementById('lbSub').textContent='Prize winners marked below';
+  document.getElementById('pauseBtn').style.display='none';
+  showScreen('screenLB');
+  updatePhase('leaderboard',CONFIG.rounds.length-1,0);
+  confetti(80);
+  setTimeout(()=>showGameOver(players),12000);
+}
+
+function showGameOver(players){
+  document.getElementById('winnerName').textContent=players[0]?.name||'—';
+  renderLB('goList',5);
+  showScreen('screenOver');
+  updatePhase('gameover',0,0);
+  confetti(100);
+  let sec=30;
+  const el=document.getElementById('goRestart');
+  const ct=setInterval(()=>{sec--;el.textContent=`New game starting in ${sec}…`;if(sec<=0){clearInterval(ct);location.reload();}},1000);
+}
+
+initSession();
+</script>
+</body>
+</html>
